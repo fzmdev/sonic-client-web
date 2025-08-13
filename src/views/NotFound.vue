@@ -11,17 +11,17 @@ const { t: $t } = useI18n();
         <img class="pic-404__parent" src="@/assets/img/404.png" alt="404" />
         <img
           class="pic-404__child left"
-          src="@/assets/404_cloud.png"
+          src="@/assets/img/404_cloud.png"
           alt="404"
         />
         <img
           class="pic-404__child mid"
-          src="@/assets/404_cloud.png"
+          src="@/assets/img/404_cloud.png"
           alt="404"
         />
         <img
           class="pic-404__child right"
-          src="@/assets/404_cloud.png"
+          src="@/assets/img/404_cloud.png"
           alt="404"
         />
       </div>
