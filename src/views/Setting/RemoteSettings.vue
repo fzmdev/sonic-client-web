@@ -85,7 +85,7 @@ onMounted(() => {
     />
 
     {{ $t('settingIndexTS.remote.text') }}
-    <el-input-number v-model="remoteTimeout" :min="1" :max="9600" /> min
+    <el-input-number v-model="remoteTimeout" :min="1" /> min
     <el-button type="primary" size="small" @click="setRemoteTimeout">{{
       $t('form.save')
     }}</el-button>
@@ -97,7 +97,7 @@ onMounted(() => {
         style="margin-bottom: 10px"
       />
       {{ $t('settingIndexTS.remote.idle_text') }}
-      <el-input-number v-model="idleTimeout" :min="1" :max="9600" /> min
+      <el-input-number v-model="idleTimeout" :min="1" /> min
       <el-button type="primary" size="small" @click="setIdleTimeout">{{
         $t('form.save')
       }}</el-button>
