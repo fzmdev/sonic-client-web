@@ -36,7 +36,7 @@ import ElementUpdate from '@/components/ElementUpdate.vue';
 import Pageable from '@/components/Pageable.vue';
 import defaultLogo from '@/assets/logo.png';
 import {
-  Location,
+  Aim,
   Place,
   FullScreen,
   Download,
@@ -130,14 +130,13 @@ const activeTab = ref('main');
 const activeTab2 = ref('step');
 const stepLog = ref([]);
 const debugLoading = ref(false);
-const checkElementLoading = ref(false);
 const dialogElement = ref(false);
 const dialogImgElement = ref(false);
 const imgElementUrl = ref(null);
 const updateImgEle = ref(null);
 const title = ref('');
 const uploadLoading = ref(false);
-const location = ref(false);
+// location.value已移除，改用directionStatus.value进行精确的4方向旋转处理
 const screenFps = ref('high');
 const isWebView = ref(true);
 const webViewListDetail = ref([]);
@@ -348,9 +347,14 @@ const switchTabs = (e) => {
   }
 };
 const switchLocation = () => {
-  location.value = !location.value;
+  // 在4个方向之间循环切换: 0° → 90° → 180° → 270° → 0°
+  const rotations = [0, 90, 180, 270];
+  const currentIndex = rotations.indexOf(directionStatus.value);
+  const nextIndex = (currentIndex + 1) % rotations.length;
+  directionStatus.value = rotations[nextIndex];
+
   ElMessage.success({
-    message: $t('IOSRemote.calibration'),
+    message: `${$t('IOSRemote.calibration')}: ${directionStatus.value}°`,
   });
 };
 const selectCase = (val) => {
@@ -745,7 +749,7 @@ const websocketOnmessage = (message) => {
           });
         }
         directionStatus.value = JSON.parse(message.data).value;
-        location.value = !location.value;
+        // 不再使用location.value，直接使用directionStatus.value进行4方向判断
       }
       break;
     }
@@ -816,7 +820,6 @@ const websocketOnmessage = (message) => {
     }
     case 'status': {
       debugLoading.value = false;
-      checkElementLoading.value = false;
       ElMessage.info({
         message: $t('androidRemoteTS.runOver'),
       });
@@ -897,24 +900,56 @@ const stopPerfmon = () => {
     })
   );
 };
+
+/**
+ * 计算设备坐标
+ * 根据不同的旋转角度（0/90/180/270）进行坐标转换
+ * @param {MouseEvent} event - 鼠标事件
+ * @returns {{x: number, y: number}} 设备坐标
+ */
+const calculateCoordinates = (event) => {
+  const iosCap = document.getElementById('iosCap');
+  const rect = iosCap.getBoundingClientRect();
+  const clickX = event.clientX - rect.left;
+  const clickY = event.clientY - rect.top;
+
+  let x;
+  let y;
+
+  if (directionStatus.value === 90) {
+    // 90°横屏: Home键在右
+    const _x = Math.round(clickY * (imgWidth / rect.height));
+    const _y = Math.round(clickX * (imgHeight / rect.width));
+    x = imgWidth - _x; // 镜像X
+    y = _y;
+  } else if (directionStatus.value === 270) {
+    // 270°横屏: Home键在左
+    const _x = Math.round(clickY * (imgWidth / rect.height));
+    const _y = Math.round(clickX * (imgHeight / rect.width));
+    x = _x;
+    y = imgHeight - _y; // 镜像Y
+  } else if (directionStatus.value === 180) {
+    // 180°倒立: 镜像XY
+    x = imgWidth - Math.round(clickX * (imgWidth / rect.width));
+    y = imgHeight - Math.round(clickY * (imgHeight / rect.height));
+  } else {
+    // 0°正常竖屏
+    x = Math.round(clickX * (imgWidth / rect.width));
+    y = Math.round(clickY * (imgHeight / rect.height));
+  }
+
+  return { x, y };
+};
+
 const mouseup = (event) => {
   clearInterval(loop);
   time = 0;
+
+  // 使用新的4方向坐标计算函数
+  const { x, y } = calculateCoordinates(event);
+
   const iosCap = document.getElementById('iosCap');
   const rect = iosCap.getBoundingClientRect();
-  let x;
-  let y;
-  if (location.value) {
-    x = parseInt(
-      (event.clientX - rect.left) * (imgHeight / iosCap.clientWidth)
-    );
-    y = parseInt((event.clientY - rect.top) * (imgWidth / iosCap.clientHeight));
-  } else {
-    x = parseInt((event.clientX - rect.left) * (imgWidth / iosCap.clientWidth));
-    y = parseInt(
-      (event.clientY - rect.top) * (imgHeight / iosCap.clientHeight)
-    );
-  }
   inputBoxStyle.value = {
     left: `${event.clientX - rect.left}px`,
     top: `${event.clientY - rect.top}px`,
@@ -948,23 +983,11 @@ const mouseleave = () => {
   isLongPress = false;
 };
 const mousedown = (event) => {
-  const iosCap = document.getElementById('iosCap');
-  const rect = iosCap.getBoundingClientRect();
-  if (location.value) {
-    moveX = parseInt(
-      (event.clientX - rect.left) * (imgHeight / iosCap.clientWidth)
-    );
-    moveY = parseInt(
-      (event.clientY - rect.top) * (imgWidth / iosCap.clientHeight)
-    );
-  } else {
-    moveX = parseInt(
-      (event.clientX - rect.left) * (imgWidth / iosCap.clientWidth)
-    );
-    moveY = parseInt(
-      (event.clientY - rect.top) * (imgHeight / iosCap.clientHeight)
-    );
-  }
+  // 使用新的4方向坐标计算函数
+  const { x, y } = calculateCoordinates(event);
+  moveX = x;
+  moveY = y;
+
   clearInterval(loop);
   loop = setInterval(() => {
     time += 500;
@@ -1085,18 +1108,6 @@ const runStep = () => {
       type: 'debug',
       detail: 'runStep',
       caseId: testCase.value.id,
-    })
-  );
-};
-const checkLocation = (data) => {
-  checkElementLoading.value = true;
-  websocket.send(
-    JSON.stringify({
-      type: 'debug',
-      detail: 'checkLocation',
-      element: data.eleValue,
-      eleType: data.eleType,
-      pwd: device.value.password,
     })
   );
 };
@@ -1374,10 +1385,7 @@ const checkAlive = () => {
       :project-id="project['id']"
       :element-id="0"
       :element-obj="element"
-      :is-remote-page="true"
-      :check-loading="checkElementLoading"
       @flush="dialogElement = false"
-      @check-location="checkLocation"
     />
   </el-dialog>
   <remote-page-header
@@ -2786,23 +2794,6 @@ const checkAlive = () => {
                                   elementDetail['name']
                                 }}</span>
                                 <el-icon
-                                  color="green"
-                                  size="16"
-                                  style="
-                                    vertical-align: middle;
-                                    margin-left: 10px;
-                                    cursor: pointer;
-                                  "
-                                  @click="
-                                    checkLocation({
-                                      eleType: 'accessibilityId',
-                                      eleValue: elementDetail['name'],
-                                    })
-                                  "
-                                >
-                                  <Location />
-                                </el-icon>
-                                <el-icon
                                   v-if="project && project['id']"
                                   color="green"
                                   size="16"
@@ -2837,23 +2828,6 @@ const checkAlive = () => {
                                         >{{ scope.row }}</span
                                       >
                                       <el-icon
-                                        color="green"
-                                        size="16"
-                                        style="
-                                          vertical-align: middle;
-                                          margin-left: 10px;
-                                          cursor: pointer;
-                                        "
-                                        @click="
-                                          checkLocation({
-                                            eleType: 'nsPredicate',
-                                            eleValue: scope.row,
-                                          })
-                                        "
-                                      >
-                                        <Location />
-                                      </el-icon>
-                                      <el-icon
                                         v-if="project && project['id']"
                                         color="green"
                                         size="16"
@@ -2887,23 +2861,6 @@ const checkAlive = () => {
                                         @click="copy(scope.row)"
                                         >{{ scope.row }}</span
                                       >
-                                      <el-icon
-                                        color="green"
-                                        size="16"
-                                        style="
-                                          vertical-align: middle;
-                                          margin-left: 10px;
-                                          cursor: pointer;
-                                        "
-                                        @click="
-                                          checkLocation({
-                                            eleType: 'classChain',
-                                            eleValue: scope.row,
-                                          })
-                                        "
-                                      >
-                                        <Location />
-                                      </el-icon>
                                       <el-icon
                                         v-if="project && project['id']"
                                         color="green"
@@ -2943,23 +2900,6 @@ const checkAlive = () => {
                                         >{{ scope.row }}</span
                                       >
                                       <el-icon
-                                        color="green"
-                                        size="16"
-                                        style="
-                                          vertical-align: middle;
-                                          margin-left: 10px;
-                                          cursor: pointer;
-                                        "
-                                        @click="
-                                          checkLocation({
-                                            eleType: 'xpath',
-                                            eleValue: scope.row,
-                                          })
-                                        "
-                                      >
-                                        <Location />
-                                      </el-icon>
-                                      <el-icon
                                         v-if="project && project['id']"
                                         color="green"
                                         size="16"
@@ -2985,23 +2925,6 @@ const checkAlive = () => {
                                 <span @click="copy(elementDetail['xpath'])">{{
                                   elementDetail['xpath']
                                 }}</span>
-                                <el-icon
-                                  color="green"
-                                  size="16"
-                                  style="
-                                    vertical-align: middle;
-                                    margin-left: 10px;
-                                    cursor: pointer;
-                                  "
-                                  @click="
-                                    checkLocation({
-                                      eleType: 'xpath',
-                                      eleValue: elementDetail['xpath'],
-                                    })
-                                  "
-                                >
-                                  <Location />
-                                </el-icon>
                                 <el-icon
                                   v-if="project && project['id']"
                                   color="green"
@@ -3068,28 +2991,6 @@ const checkAlive = () => {
                                     )
                                   }}</span
                                 >
-                                <el-icon
-                                  color="green"
-                                  size="16"
-                                  style="
-                                    vertical-align: middle;
-                                    margin-left: 10px;
-                                    cursor: pointer;
-                                  "
-                                  @click="
-                                    checkLocation({
-                                      eleType: 'point',
-                                      eleValue: computedCenter(
-                                        elementDetail['x'],
-                                        elementDetail['y'],
-                                        elementDetail['width'],
-                                        elementDetail['height']
-                                      ),
-                                    })
-                                  "
-                                >
-                                  <Location />
-                                </el-icon>
                                 <el-icon
                                   v-if="project && project['id']"
                                   color="green"
