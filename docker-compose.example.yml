@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # Sonic Client Web 前端服务
+  sonic-web:
+    image: sonic-client-web:latest  # 使用构建的镜像
+    container_name: sonic-web
+    ports:
+      - "80:80"
+    networks:
+      - sonic-network
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    # 如果需要连接到 sonic-server-gateway
+    depends_on:
+      - sonic-server-gateway
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Sonic Server Gateway (示例配置，需根据实际情况调整)
+  sonic-server-gateway:
+    image: sonic-server-gateway:latest
+    container_name: sonic-server-gateway
+    ports:
+      - "3000:3000"
+    networks:
+      - sonic-network
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - SPRING_PROFILES_ACTIVE=prod
+
+networks:
+  sonic-network:
+    driver: bridge
+
+# 使用方法:
+# 1. 复制此文件为 docker-compose.yml
+# 2. 根据实际情况修改配置
+# 3. 运行: docker-compose up -d
+# 4. 查看日志: docker-compose logs -f
+# 5. 停止服务: docker-compose down

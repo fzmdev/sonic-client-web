@@ -1,15 +1,13 @@
-import { defineConfig } from 'vite';
-import { join } from 'path';
-import vue from '@vitejs/plugin-vue';
+// vite.config.cjs
+const { defineConfig } = require('vite');
+const { join } = require('path');
+const vue = require('@vitejs/plugin-vue');
 
-// https://vitejs.dev/config/
-export default defineConfig({
+module.exports = defineConfig({
   plugins: [vue()],
-  server: {
-    port: 3002,
-  },
+  // TODO: 本地调试时需换成你的ip
+  server: { host: '10.0.114.238', port: 3002 },
   build: {
-    chunkSizeWarningLimit: 600, // 设置警告阈值为600KiB
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -25,8 +23,12 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@': join(__dirname, 'src'),
-    },
+    alias: [
+      { find: '@', replacement: join(__dirname, 'src') },
+      {
+        find: /^vue3-video-play$/,
+        replacement: 'vue3-video-play/dist/index.mjs',
+      },
+    ],
   },
 });
